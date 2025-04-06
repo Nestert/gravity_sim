@@ -1,0 +1,11 @@
+/gravity_sim.dSYM
+gravity_sim
+*.dll
+/vendor
+/obj
+/bin
+/build
+/dist
+/release
+/debug
+/release
