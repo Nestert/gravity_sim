@@ -30,7 +30,12 @@ extern float cameraFov;   // Поле зрения (Zoom)
 
 extern std::vector<Object> objs; // Глобальный вектор объектов
 extern int selectedObjectIndex; // Индекс выбранного объекта
-extern float gridDeformationStrength; // Сила деформации сетки (для ImGui)
+extern float gridDeformationStrength; // Сила искажения сетки (для ImGui)
+
+// Новые переменные для управления физикой
+extern float minGravityDistanceMeters;
+extern float simulationScale;
+extern float massMultiplier;
 
 // Прототипы функций
 void SetCallbacks(GLFWwindow* window);

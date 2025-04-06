@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <deque> // Для DrawTrail
 
 namespace Graphics {
 
@@ -217,6 +218,61 @@ std::pair<GLuint, GLuint> SetupGridGeometry(const std::vector<float>& vertices) 
     glBindVertexArray(0);
 
     return {VAO, VBO};
+}
+
+// Настройка геометрии для отрисовки трейлов (один VAO/VBO на все)
+TrailRenderData SetupTrailGeometry() {
+    TrailRenderData data;
+    glGenVertexArrays(1, &data.VAO);
+    glGenBuffers(1, &data.VBO);
+
+    glBindVertexArray(data.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, data.VBO);
+
+    // Просто настраиваем атрибут позиции, данные загрузим позже
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return data;
+}
+
+// Отрисовка трейла для одного объекта
+void DrawTrail(GLuint shaderProgramID, const TrailRenderData& trailData, const std::deque<glm::vec3>& trajectory, const glm::vec4& color) {
+    if (trailData.VAO == 0 || trailData.VBO == 0 || trajectory.size() < 2) {
+        return; // Нечего рисовать
+    }
+
+    glUseProgram(shaderProgramID);
+
+    // Копируем данные из deque в vector для получения непрерывного блока памяти
+    std::vector<glm::vec3> trajectory_vector(trajectory.begin(), trajectory.end());
+
+    // Загружаем текущую траекторию в VBO из вектора
+    glBindBuffer(GL_ARRAY_BUFFER, trailData.VBO);
+    // Используем данные из временного вектора
+    glBufferData(GL_ARRAY_BUFFER, trajectory_vector.size() * sizeof(glm::vec3), trajectory_vector.data(), GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // Устанавливаем цвет трейла
+    GLint colorLoc = glGetUniformLocation(shaderProgramID, "trailColor");
+    if (colorLoc != -1) {
+        glUniform4fv(colorLoc, 1, glm::value_ptr(color));
+    }
+    // Установка model матрицы (единичная, т.к. координаты мировые)
+    glm::mat4 model = glm::mat4(1.0f);
+    GLint modelLoc = glGetUniformLocation(shaderProgramID, "model");
+     if (modelLoc != -1) {
+         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    }
+
+    // Рисуем линию
+    glBindVertexArray(trailData.VAO);
+    // Используем размер вектора (он совпадает с deque)
+    glDrawArrays(GL_LINE_STRIP, 0, trajectory_vector.size());
+    glBindVertexArray(0);
 }
 
 // Отрисовка объекта (правильная реализация)

@@ -34,6 +34,11 @@ std::vector<Object> objs; // Глобальный вектор объектов
 int selectedObjectIndex = -1; // Ничего не выбрано
 float gridDeformationStrength = DEFORMATION_STRENGTH; // Инициализация константой
 
+// Определения новых переменных для управления физикой
+float minGravityDistanceMeters = MIN_GRAVITY_DISTANCE_METERS; // Инициализация из Constants.h
+float simulationScale = SIMULATION_SCALE; // Инициализация из Constants.h
+float massMultiplier = 1.0e6f; // Инициализация текущим множителем
+
 // Функция для установки всех колбэков
 void SetCallbacks(GLFWwindow* window) {
     glfwSetKeyCallback(window, keyCallback);
@@ -84,7 +89,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         if (mouseCaptured) {
             // Параметры нового объекта
             float offset = 1500.0f; // Расстояние от камеры
-            float speed = 1000.0f;  // Начальная скорость
+            float speed = 1500.0f;  // Начальная скорость - УМЕНЬШЕНО!
             float mass = 5.972e20f; // Масса (поменьше, чем у планет)
             float density = 5515.0f;
             // Случайный цвет

@@ -52,10 +52,11 @@ int main() {
     glfwSetInputMode(window, GLFW_CURSOR, Input::mouseCaptured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
     std::cout << "[DEBUG] Initial cursor mode set." << std::endl;
 
-    // Создание шейдерной программы (GLuint)
+    // Создание шейдерных программ
     GLuint shaderProgramID = Graphics::CreateShaderProgram("shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
     GLuint gridShaderProgramID = Graphics::CreateShaderProgram("shaders/grid_vertex.glsl", "shaders/grid_fragment.glsl");
-    if (shaderProgramID == 0 || gridShaderProgramID == 0) {
+    GLuint trailShaderProgramID = Graphics::CreateShaderProgram("shaders/trail_vertex.glsl", "shaders/trail_fragment.glsl"); // Шейдер для трейлов
+    if (shaderProgramID == 0 || gridShaderProgramID == 0 || trailShaderProgramID == 0) {
         std::cerr << "[FATAL] Failed to create shader programs." << std::endl;
         // ... очистка и выход ...
         glfwTerminate();
@@ -75,10 +76,10 @@ int main() {
     glm::vec3 gridColorMin = glm::vec3(0.0f, 0.0f, 1.0f);
     glm::vec3 gridColorMax = glm::vec3(1.0f, 0.0f, 0.0f);
 
-    // Объекты симуляции (используем глобальный вектор из Input)
-    Input::objs.emplace_back(glm::vec3(-5000, 650, -350), glm::vec3(0, 0, 1500), 5.972e22f, 5515, glm::vec4(0.0f, 0.5f, 1.0f, 1.0f));
-    Input::objs.emplace_back(glm::vec3(5000, 650, -350), glm::vec3(0, 0, -1500), 5.972e22f, 5515, glm::vec4(0.0f, 1.0f, 0.5f, 1.0f));
-    Input::objs.emplace_back(glm::vec3(0, 0, -350), glm::vec3(0, 0, 0), 1.989e24f, 5515, glm::vec4(1.0f, 0.9f, 0.2f, 1.0f), false);
+    // Объекты симуляции (ВОЗВРАЩЕНЫ ИСХОДНЫЕ МАССЫ)
+    Input::objs.emplace_back(glm::vec3(-5000, 650, -350), glm::vec3(0, 0, 15.0f), 5.972e22f, 5515, glm::vec4(0.0f, 0.5f, 1.0f, 1.0f)); // Исходная масса
+    Input::objs.emplace_back(glm::vec3(5000, 650, -350), glm::vec3(0, 0, -15.0f), 5.972e22f, 5515, glm::vec4(0.0f, 1.0f, 0.5f, 1.0f)); // Исходная масса
+    Input::objs.emplace_back(glm::vec3(0, 0, -350), glm::vec3(0, 0, 0), 1.989e24f, 5515, glm::vec4(1.0f, 0.9f, 0.2f, 1.0f), false); // Исходная масса
     std::cout << "[DEBUG] Object Creation OK." << std::endl;
 
     // Создаем геометрию для всех объектов
@@ -98,12 +99,26 @@ int main() {
         // ... cleanup and exit ...
         glDeleteProgram(shaderProgramID);
         glDeleteProgram(gridShaderProgramID);
+        glDeleteProgram(trailShaderProgramID);
         glfwTerminate();
         return -1;
     }
     std::cout << "[DEBUG] Setup Grid Geometry OK (VAO: " << gridVAO << ", VBO: " << gridVBO << ")." << std::endl;
     std::vector<float> currentGridVertices = initialGridVertices;
     // Сила деформации теперь глобальная в Input::gridDeformationStrength
+
+    // Настройка геометрии для трейлов
+    Graphics::TrailRenderData trailData = Graphics::SetupTrailGeometry();
+    if (trailData.VAO == 0 || trailData.VBO == 0) {
+        std::cerr << "[FATAL] Failed to setup trail geometry." << std::endl;
+         // ... cleanup and exit ...
+         glDeleteProgram(shaderProgramID);
+         glDeleteProgram(gridShaderProgramID);
+         glDeleteProgram(trailShaderProgramID);
+         glfwTerminate();
+        return -1;
+    }
+    std::cout << "[DEBUG] Setup Trail Geometry OK." << std::endl;
 
     std::cout << "[INFO] Starting main loop..." << std::endl;
     lastFrame = static_cast<float>(glfwGetTime());
@@ -114,9 +129,14 @@ int main() {
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
+        // Ограничиваем максимальный шаг времени для стабильности
+        if (deltaTime > MAX_TIME_STEP) {
+            deltaTime = MAX_TIME_STEP;
+        }
+
         // Обработка ввода (GLFW + наш)
         glfwPollEvents();
-        Input::processInput(window, deltaTime); // Используем processInput из Input
+        Input::processInput(window, deltaTime); // Передаем ограниченный deltaTime
 
         // --- Начало нового кадра ImGui ---
         ImGui_ImplOpenGL3_NewFrame();
@@ -152,6 +172,21 @@ int main() {
                          std::cout << "[INFO] Grid update enabled: " << (Input::updateGridEnabled ? "true" : "false") << " via GUI" << std::endl;
                     }
                     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+                    ImGui::Separator();
+                    ImGui::Text("Physics Parameters:");
+
+                    const float min_dist = 0.01f;
+                    const float max_dist = 1.0e6f;
+                    ImGui::DragFloat("Min Gravity Dist (m)##Physics", &Input::minGravityDistanceMeters, 10.0f, min_dist, max_dist, "%.2f");
+
+                    const float min_scale = 1.0f;
+                    const float max_scale = 1.0e9f;
+                    ImGui::DragFloat("Simulation Scale##Physics", &Input::simulationScale, 1000.0f, min_scale, max_scale, "%.0f", ImGuiSliderFlags_Logarithmic);
+
+                    const float min_mass_mult = 1.0e-6f;
+                    const float max_mass_mult = 1.0e12f;
+                    ImGui::DragFloat("Mass Multiplier##Physics", &Input::massMultiplier, 0.1f, min_mass_mult, max_mass_mult, "%.2e", ImGuiSliderFlags_Logarithmic);
                 }
             }
             ImGui::End();
@@ -159,7 +194,7 @@ int main() {
 
         // --- Обновление физики ---
         if (!Input::pause) {
-            UpdatePhysics(Input::objs, deltaTime); // Обновляем глобальный вектор Input::objs
+            UpdatePhysics(Input::objs, deltaTime); // Используем ограниченный deltaTime
         }
 
         // --- Рендеринг сцены ---
@@ -209,6 +244,19 @@ int main() {
         if(gridColorMaxLoc != -1) glUniform3fv(gridColorMaxLoc, 1, glm::value_ptr(gridColorMax));
         Graphics::DrawGrid(gridShaderProgramID, gridVAO, initialGridVertices.size() / 4);
 
+        // Рендеринг трейлов
+        glUseProgram(trailShaderProgramID);
+        GLint projLocTrail = glGetUniformLocation(trailShaderProgramID, "projection");
+        GLint viewLocTrail = glGetUniformLocation(trailShaderProgramID, "view");
+        glUniformMatrix4fv(projLocTrail, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(viewLocTrail, 1, GL_FALSE, glm::value_ptr(view));
+        for (const auto& obj : Input::objs) {
+             // Используем цвет объекта для трейла, но с меньшей альфой
+             glm::vec4 trailColor = obj.color;
+             trailColor.a *= 0.5f;
+             Graphics::DrawTrail(trailShaderProgramID, trailData, obj.trajectory, trailColor);
+        }
+
         // --- Рендеринг ImGui ---
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -228,8 +276,11 @@ int main() {
     Input::objs.clear();
     glDeleteVertexArrays(1, &gridVAO);
     glDeleteBuffers(1, &gridVBO);
-    glDeleteProgram(shaderProgramID); // Удаляем программы по ID
+    glDeleteVertexArrays(1, &trailData.VAO); // Очистка VAO трейла
+    glDeleteBuffers(1, &trailData.VBO);    // Очистка VBO трейла
+    glDeleteProgram(shaderProgramID);
     glDeleteProgram(gridShaderProgramID);
+    glDeleteProgram(trailShaderProgramID); // Очистка шейдера трейла
 
     glfwTerminate();
     return 0;

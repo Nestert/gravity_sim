@@ -23,6 +23,8 @@ Object::Object(glm::vec3 initPosition, glm::vec3 initVelocity, float initMass, f
     : position(initPosition), velocity(initVelocity), mass(initMass), density(initDensity), color(initColor), glow(initGlow)
 {
     UpdateRadius();
+    // Добавляем начальную позицию в траекторию
+    trajectory.push_back(position);
     // Удален вызов CreateVBOVAO - геометрия создается позже в Graphics::SetupObjectGeometry
     // std::vector<float> vertices = GenerateSphereVertices();
     // vertexCount = vertices.size();
@@ -122,15 +124,16 @@ bool Object::CheckCollision(const Object& other) const {
 // Реализация перемещающего конструктора (исправлен порядок)
 Object::Object(Object&& other) noexcept
     : VAO(other.VAO), VBO(other.VBO), position(std::move(other.position)), velocity(std::move(other.velocity)),
-      mass(other.mass), density(other.density), // mass, density перед color, initializing
-      color(std::move(other.color)), initializing(other.initializing),
+      mass(other.mass), density(other.density), color(std::move(other.color)), initializing(other.initializing),
       radius_sim(other.radius_sim), radius_meters(other.radius_meters),
       glow(other.glow), acceleration(std::move(other.acceleration)),
-      vertexCount(other.vertexCount) // vertexCount в конце
+      vertexCount(other.vertexCount),
+      trajectory(std::move(other.trajectory)) // Перемещаем траекторию
 {
     other.VAO = 0;
     other.VBO = 0;
     other.vertexCount = 0;
+    // other.trajectory очистится при перемещении
 }
 
 // Реализация перемещающего оператора присваивания
@@ -142,9 +145,10 @@ Object& Object::operator=(Object&& other) noexcept {
 
         // Перемещаем данные
         VAO = other.VAO; VBO = other.VBO; position = std::move(other.position); velocity = std::move(other.velocity);
-        vertexCount = other.vertexCount; color = std::move(other.color); initializing = other.initializing;
-        mass = other.mass; density = other.density; radius_sim = other.radius_sim;
-        radius_meters = other.radius_meters; glow = other.glow; acceleration = std::move(other.acceleration);
+        mass = other.mass; density = other.density; color = std::move(other.color); initializing = other.initializing;
+        radius_sim = other.radius_sim; radius_meters = other.radius_meters; glow = other.glow; acceleration = std::move(other.acceleration);
+        vertexCount = other.vertexCount;
+        trajectory = std::move(other.trajectory); // Перемещаем траекторию
 
         // Обнуляем ресурсы у источника
         other.VAO = 0; other.VBO = 0; other.vertexCount = 0;

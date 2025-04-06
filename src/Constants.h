@@ -18,10 +18,12 @@ const double SPEED_OF_LIGHT = 299792458.0; // м/с
 
 // --- Симуляция ---
 const float SIMULATION_SCALE = 1.0e6; // 1 юнит симуляции = 1,000,000 метров (1000 км)
-const float MIN_GRAVITY_DISTANCE_METERS = 100.0f;   // Минимальная дистанция для расчета гравитации в метрах
+const float MIN_GRAVITY_DISTANCE_METERS = 0.1f;   // Сильно уменьшено! Минимальная дистанция для расчета гравитации в метрах
 const float MIN_GRAVITY_DISTANCE_SIM = MIN_GRAVITY_DISTANCE_METERS * SIMULATION_SCALE;
 // Искажение сетки
 const float DEFORMATION_STRENGTH = 1.0e-18f; // Сильно уменьшено для теста
+const float MAX_TIME_STEP = 0.03f; // Максимальный шаг времени для стабильности
+const int MAX_TRAIL_POINTS = 500; // Максимальная длина хвоста траектории
 
 // --- Управление ---
 const float CAMERA_SPEED_BASE = 2500.0f; // Базовая скорость камеры (юнитов/с)

@@ -7,6 +7,7 @@
 #include <glm/gtc/constants.hpp> // Для glm::pi
 #include <vector>
 #include <cmath> // Для std::cbrt
+#include <deque> // Для std::deque
 
 // Включим константы
 #include "Constants.h"
@@ -29,6 +30,9 @@ public:
     float radius_meters;
     bool glow;
     glm::vec3 acceleration = glm::vec3(0.0f);
+
+    // История траектории
+    std::deque<glm::vec3> trajectory;
 
     Object(glm::vec3 initPosition, glm::vec3 initVelocity, float initMass, float initDensity = 5515.0f, glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), bool initGlow = false);
     ~Object();

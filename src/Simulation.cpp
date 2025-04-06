@@ -1,8 +1,10 @@
 // Simulation.cpp
 #include "Simulation.h"
+#include "Input.h" // Включаем для доступа к настраиваемым параметрам
 #include <cmath>     // Для std::sqrt
 #include <iostream> // Для отладки
 #include <numeric> // для std::accumulate
+#include <vector> // Добавлено для std::vector<glm::vec3>
 
 namespace {
 // ... sphericalToCartesian ...
@@ -67,38 +69,67 @@ std::vector<float> UpdateGridVertices(const std::vector<float>& initialVertices,
     return updatedVertices;
 }
 
-// Обновление физики объектов
+// Обновление физики объектов с использованием метода Верле (Velocity Verlet)
 void UpdatePhysics(std::vector<Object>& objs, float dt) {
-    if (dt <= 0) return; // Не обновлять, если время не идет
+    if (dt <= 0) return;
 
-    // 1. Рассчитать ускорения для всех объектов
-    for (auto& obj1 : objs) {
-        obj1.acceleration = glm::vec3(0.0f);
-        if (obj1.initializing) continue;
+    float dt_half = 0.5f * dt;
+    float dt_sq_half = 0.5f * dt * dt;
 
-        for (const auto& obj2 : objs) {
-            if (&obj1 == &obj2 || obj2.initializing) continue;
+    // 1. Рассчитать новые позиции (используя ускорения с предыдущего шага)
+    for (auto& obj : objs) {
+        if (obj.initializing) continue;
+        obj.position += obj.velocity * dt + obj.acceleration * dt_sq_half;
+    }
 
-            glm::vec3 direction = obj2.position - obj1.position;
+    // 2. Рассчитать новые ускорения a(t+dt) на основе новых позиций
+    std::vector<glm::vec3> new_accelerations(objs.size(), glm::vec3(0.0f));
+    // Получаем значения из Input ОДИН раз перед циклами
+    const float currentSimScale = Input::simulationScale;
+    const float currentMinGravityDistMeters = Input::minGravityDistanceMeters;
+    const float currentMassMultiplier = Input::massMultiplier;
+    // Рассчитываем минимальное расстояние в юнитах симуляции ПРАВИЛЬНО
+    const float minGravityDistanceSim = currentMinGravityDistMeters / currentSimScale;
+
+    for (size_t i = 0; i < objs.size(); ++i) {
+        new_accelerations[i] = glm::vec3(0.0f);
+        if (objs[i].initializing || objs[i].mass <= 0) continue;
+
+        for (size_t j = 0; j < objs.size(); ++j) {
+            if (i == j || objs[j].initializing) continue;
+
+            glm::vec3 direction = objs[j].position - objs[i].position;
             float distance_sim = glm::length(direction);
-            float distance_sim_safe = glm::max(distance_sim, MIN_GRAVITY_DISTANCE_SIM);
+            // Используем новое, правильно рассчитанное minGravityDistanceSim
+            float distance_sim_safe = glm::max(distance_sim, minGravityDistanceSim);
 
-            float distance_meters = distance_sim_safe * SIMULATION_SCALE;
-            if (distance_meters > 0 && obj1.mass > 0) { // Добавлена проверка массы obj1
-                 double force_magnitude = (GRAVITATIONAL_CONSTANT * obj1.mass * obj2.mass) / (distance_meters * distance_meters);
+            // Переводим безопасное расстояние симуляции в метры
+            float distance_meters = distance_sim_safe * currentSimScale;
+            if (distance_meters > 0 && currentMassMultiplier > 0) {
+                 // Учитываем massMultiplier при расчете силы
+                 double force_magnitude = (GRAVITATIONAL_CONSTANT * (objs[i].mass * currentMassMultiplier) * (objs[j].mass * currentMassMultiplier)) / (distance_meters * distance_meters);
                  glm::vec3 force_vector = glm::normalize(direction) * static_cast<float>(force_magnitude);
-                 glm::vec3 acceleration_meters = force_vector / obj1.mass;
-                 obj1.acceleration += (acceleration_meters / SIMULATION_SCALE);
+                 // Делим на массу БЕЗ множителя и на масштаб
+                 new_accelerations[i] += (force_vector / objs[i].mass) / currentSimScale;
             }
         }
     }
 
-    // 2. Обновить скорости и позиции
-    for (auto& obj : objs) {
-         if (obj.initializing) continue;
-         obj.velocity += obj.acceleration * dt;
-         obj.position += obj.velocity * dt;
+    // 3. Рассчитать новые скорости v(t+dt) и обновить ускорения для следующего шага
+    for (size_t i = 0; i < objs.size(); ++i) {
+         if (objs[i].initializing) continue;
+         objs[i].velocity += (objs[i].acceleration + new_accelerations[i]) * dt_half;
+         objs[i].acceleration = new_accelerations[i];
     }
 
-    // TODO: Добавить обработку столкновений после обновления позиций
+    // 4. Обновить историю траекторий
+    for (auto& obj : objs) {
+        if (obj.initializing) continue;
+        obj.trajectory.push_back(obj.position);
+        while (obj.trajectory.size() > MAX_TRAIL_POINTS) {
+            obj.trajectory.pop_front();
+        }
+    }
+
+    // TODO: Обработка столкновений
 } 
